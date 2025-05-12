@@ -2,11 +2,14 @@ import torch
 import wandb
 import hydra
 from tqdm import tqdm
-
+import torch.multiprocessing as mp
 
 from utils.sanity import show_images
 
-
+# Added to ensure mutliprocessing works with wandb
+if __name__ == "__main__":
+    mp.set_start_method('spawn', force=True)
+    
 @hydra.main(config_path="configs", config_name="train")
 def train(cfg):
     logger = (
@@ -32,7 +35,7 @@ def train(cfg):
         logger.log(
             {"sanity_checks/val_images": wandb.Image(val_sanity)}
         ) if logger is not None else None
-
+    # In train.py or wherever the DataLoader is created
     # -- loop over epochs
     for epoch in tqdm(range(cfg.epochs), desc="Epochs"):
         # -- loop over training batches

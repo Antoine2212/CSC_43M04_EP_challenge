@@ -33,6 +33,9 @@ class DataModule:
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
+            persistent_workers=True,
+            pin_memory=True,
+            prefetch_factor=2,
         )
 
     def val_dataloader(self):

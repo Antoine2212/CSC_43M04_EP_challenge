@@ -1,0 +1,5 @@
+instance:
+  _target_: models.resnet.ResNetFinetune
+  backbone: resnet50
+  pretrained: true
+  frozen: false
