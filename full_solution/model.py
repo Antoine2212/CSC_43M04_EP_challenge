@@ -5,17 +5,9 @@ from torchvision import models
 import os
 import sys
 
-external_path = os.path.abspath("../topic_encoding")
-if external_path not in sys.path:
-    sys.path.insert(0, external_path)
-    
-external_path = os.path.abspath("../pure_regression")
-if external_path not in sys.path:
-    sys.path.insert(1, external_path)
 
-
-from topic_encoding.topic_model import MetadataFusion
-from pure_regression.model import ViewsPredictor
+from topic_model import MetadataFusion
+from regression_model import ViewsPredictor
 
 class FullModel(nn.Module):
     def __init__(self, hidden_dim=384, num_fields=3):
