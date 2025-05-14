@@ -35,8 +35,10 @@ class MultiModalDataset(Dataset):
         image_features = self.transform(image_features)
         # Get topic embeddings
         topic_embeddings = torch.tensor(self.topic_embeddings[idx], dtype=torch.float32)
+        # Get views
+        views = torch.tensor(self.views[idx], dtype=torch.float32)
         
-        return channel_id, numeric_features, image_features, topic_embeddings
+        return channel_id, numeric_features, image_features, topic_embeddings, views
         
         
         

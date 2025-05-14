@@ -11,11 +11,48 @@ if external_path not in sys.path:
     
 external_path = os.path.abspath("../pure_regression")
 if external_path not in sys.path:
-    sys.path.insert(0, external_path)
+    sys.path.insert(1, external_path)
 
 
 from topic_encoding.topic_model import MetadataFusion
 from pure_regression.model import ViewsPredictor
+
+class FullModel(nn.Module):
+    def __init__(self, hidden_dim=384, num_fields=3):
+        super().__init__()
+        self.fusion = MultiModalTransformer(hidden_dim, num_fields)
+        self.baseline = ViewsPredictor(num_channels=46, embedding_dim=16, numeric_features=6)
+        self.vision = models.resnet50(pretrained=True)
+        self.vision.fc = nn.Identity() # Remove the final classification layer
+        self.vision_projector = nn.Sequential(
+            nn.Linear(2048, hidden_dim),
+            nn.ReLU(),
+            nn.LayerNorm(hidden_dim)
+        )
+        self.topics = MetadataFusion(hidden_dim)
+        self.alpha = nn.Parameter(torch.tensor(0.5)) 
+        self.regressor = nn.Linear(hidden_dim, 1)  # Assuming regression task
+
+    def forward(self, channel_ids, numeric_features, image_features, topic_embeddings):
+        # Get baseline predictions
+        baseline_preds = self.baseline(channel_ids, numeric_features)
+        # Get vision features
+        vision_features = self.vision(image_features)
+        vision_features = self.vision_projector(vision_features)
+        # Get topic embeddings
+        topic_embeddings = self.topics(topic_embeddings)
+        # Concatenate all features
+        multi_modal_embeddings = torch.cat([baseline_preds.unsqueeze(1), vision_features.unsqueeze(1), topic_embeddings.unsqueeze(1)], dim=1)
+        # Pass through transformer
+        fused = self.fusion(multi_modal_embeddings)
+        output = self.regressor(fused)
+        # Add baseline predictions to the output
+        alpha = torch.clamp(self.alpha, 0.0, 1.0)
+        output = alpha * output + (1 - alpha) * baseline_preds
+        # Ensure output is squeezed to the correct shape
+        output = output.squeeze(1)
+        output = torch.exp(output)
+        return output
 
 class MultiModalTransformer(nn.Module):
     def __init__(self, hidden_dim=384, num_fields=3):
@@ -57,40 +94,3 @@ class MultiModalTransformer(nn.Module):
         fused = output.last_hidden_state[:, 0]  # take [CLS] token
         return fused  # shape: [batch_size, hidden_dim]
         super().__init__()
-        
-class FullModel(nn.Module):
-    def __init__(self, hidden_dim=384, num_fields=3):
-        super().__init__()
-        self.fusion = MultiModalTransformer(hidden_dim, num_fields)
-        self.baseline = ViewsPredictor(num_channels=46, embedding_dim=16, numeric_features=6)
-        self.vision = models.resnet50(pretrained=True)
-        self.vision.fc = nn.Identity() # Remove the final classification layer
-        self.vision_projector = nn.Sequential(
-            nn.Linear(2048, hidden_dim),
-            nn.ReLU(),
-            nn.LayerNorm(hidden_dim)
-        )
-        self.topics = MetadataFusion(hidden_dim)
-        self.alpha = nn.Parameter(torch.tensor(0.5)) 
-        self.regressor = nn.Linear(hidden_dim, 1)  # Assuming regression task
-
-    def forward(self, channel_ids, numeric_features, image_features, topic_embeddings):
-        # Get baseline predictions
-        baseline_preds = self.baseline(channel_ids, numeric_features)
-        # Get vision features
-        vision_features = self.vision(image_features)
-        vision_features = self.vision_projector(vision_features)
-        # Get topic embeddings
-        topic_embeddings = self.topics(topic_embeddings)
-        # Concatenate all features
-        multi_modal_embeddings = torch.cat([baseline_preds.unsqueeze(1), vision_features.unsqueeze(1), topic_embeddings.unsqueeze(1)], dim=1)
-        # Pass through transformer
-        fused = self.fusion(multi_modal_embeddings)
-        output = self.regressor(fused)
-        # Add baseline predictions to the output
-        alpha = torch.clamp(self.alpha, 0.0, 1.0)
-        output = alpha * output + (1 - alpha) * baseline_preds
-        # Ensure output is squeezed to the correct shape
-        output = output.squeeze(1)
-        output = torch.exp(output)
-        return output
